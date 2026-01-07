@@ -76,10 +76,10 @@ class SearchBundleResponse(BaseModel):
     tfidf_recommendations: List[TFIDFRecTiem]
     genre_recommendations: List[TMDBMovieCard]
 
-def _norm_title(t -> str) -> str:
+def _norm_title(t: str) -> str:
     return str(t).strip().lower()
 
-def make_image_url(path: Optional[str] -> Optional[str]):
+def make_image_url(path: Optional[str]) -> Optional[str]:
     if not path:
         return None
     else:
