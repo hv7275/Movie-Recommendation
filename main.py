@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-
+# .env and cros config
 load_dotenv()
 TMDB_API_KEY = os.getenv('TMDB_API_KEY')
 
@@ -32,7 +32,7 @@ app.add_middleware(
     allow_header=["*"],
 )
 
-
+# path config and global vars config
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DF_PATH = os.path.join(BASE_DIR, 'df.pkl')
@@ -48,7 +48,7 @@ tfidf_obj: Any = None
 
 TITLE_TO_IDX = Optional[Dict[str, int]] = None
 
-
+# Models 
 class TMDBMovieCard(BaseModel):
     tmdb_id:int
     title:str
@@ -76,6 +76,7 @@ class SearchBundleResponse(BaseModel):
     tfidf_recommendations: List[TFIDFRecTiem]
     genre_recommendations: List[TMDBMovieCard]
 
+# Utilities Functions
 def _norm_title(t: str) -> str:
     return str(t).strip().lower()
 
@@ -114,7 +115,7 @@ async def tmdb_get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
     return r.json()
 
 
-async def tmdb_card_fromm_results(result: List[dict], limit: int = 20) -> List[TMDBMovieCard]:
+async def tmdb_card_from_results(result: List[dict], limit: int = 20) -> List[TMDBMovieCard]:
     out: List[TMDBMovieCard] = []
     for m in (result or [])[:limit]:
         out.append(
@@ -152,3 +153,139 @@ async def tmdb_search_movies(query: str, page: int=1) -> Dict[str, Any]:
             'page':page
         }
     )
+
+async def tmdb_search_first(query: str) -> Optional[dict]:
+    data = await tmdb_search_movies(query=query, page=1)
+    results = data.get('results')
+    return results[0] if results else None
+
+
+def build_title_to_idx_map(indices: Any) -> Dict[str, int]:
+    '''
+    Docstring for build_title_to_idx_map
+    
+    :param indices: Description
+    :type indices: Any
+    :return: Description
+    :rtype: Dict[str, int]
+
+    indices.pkl can be:
+    -- dict(title -> index)
+    -- pandas series(index=title, value=index)
+    We can normlize into TITLE_TO_IDX
+
+    '''
+
+    title_to_idx: Dict[str, int] = {}
+
+    if isinstance(indices, dict):
+        for k, v in indices.items():
+            title_to_idx[_norm_title(k)] = int(v)
+        return title_to_idx
+    
+    # Pandas Series or similar mapping
+    try:
+        for k, v in indices.items():
+            title_to_idx[_norm_title(k)] = int(v)
+        return title_to_idx
+    except Exception:
+        # Last resort: if it's a List Like etc...
+        raise RuntimeError(
+            "indcies.pkl must be dict or pandas series-Like (with .items())"
+        )
+
+def get_local_idx_by_title(title: str) -> int:
+    global TITLE_TO_IDX
+    
+    if TITLE_TO_IDX is None:
+        raise HTTPException(
+            status_code=500,
+            detail="TF-IDF index map not intialized"
+        )
+    
+    key = _norm_title(title)
+    if key in TITLE_TO_IDX:
+        return int(TITLE_TO_IDX[key])
+    raise HTTPException(
+        status_code=404,
+        detail=f"Title not found in local dataset: {title}"
+    )
+
+
+def tfidf_recommend_title(query_title: str, top_n: int = 10) -> List[Tuple[str, float]]:
+    """
+    Docstring for tfidf_recommend_title
+    
+    :param query_title: Description
+    :type query_title: str
+    :param top_n: Description
+    :type top_n: int
+    :return: Description
+    :rtype: List[Tuple[str, float]]
+
+    Return List of (title, score) from local df using cosine similarity on TF-IDF matrix
+    Safe Againts missing columns
+
+    """
+
+    global df, tfidf_marix
+
+    if df is None or tfidf_marix is None:
+        raise HTTPException(
+            status_code=500,
+            detail='TF-IDF resource not loaded'
+        )
+    
+    idx = get_local_idx_by_title(query_title)
+
+    # query vector
+    qv = tfidf_marix[idx]
+    score = (tfidf_marix @ qv.T).toarray().ravel()
+
+    # sort descending
+    order = np.argsort(-score)
+
+    out: List[Tuple[str, float]] = []
+    for i in order:
+        if int(i) == int(idx):
+            continue
+        try:
+            title_i = str(df.iloc[int(i)]['title'])
+        except Exception:
+            continue
+
+        if len(out) >= top_n:
+            break
+
+    return out
+
+async def attach_tmdb_card_by_title(title: str) -> Optional[TMDBMovieCard]:
+    """
+    Docstring for attach_tmdb_card_by_title
+    
+    :param title: Description
+    :type title: str
+    :return: Description
+    :rtype: TMDBMovieCard | None
+
+    Uses TMDB search by title to fatch poster for a local title.
+    If not found, returns None (never crashes the endpoints)
+    """
+
+    try:
+        m = await tmdb_search_first(title)
+
+        if not m:
+            return None
+        
+        return TMDBMovieCard(
+            tmdb_id=int(m['id']),
+            title=m.get('title') or title,
+            poster_url=make_image_url(m.get('poster_path')),
+            release_date=m.get('release_date'),
+            vote_average=m.get('vote_average')
+        )
+    
+    except Exception:
+        return None
+    
