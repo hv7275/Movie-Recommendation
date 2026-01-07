@@ -15,7 +15,7 @@ load_dotenv()
 TMDB_API_KEY = os.getenv('TMDB_API_KEY')
 
 TMDB_BASE = "https://api.themoviedb.org/3"
-TMD_IMG_500 = "https://image.tmdb.org/t/p/w500"
+TMDB_IMG_500 = "https://image.tmdb.org/t/p/w500"
 
 if not TMDB_API_KEY:
     # Don't crash import-time in production if you prefered; but for better fail early
@@ -47,3 +47,41 @@ tfidf_marix: Any = None
 tfidf_obj: Any = None
 
 TITLE_TO_IDX = Optional[Dict[str, int]] = None
+
+
+class TMDBMovieCard(BaseModel):
+    tmdb_id:int
+    title:str
+    poster_url: Optional[str] = None
+    release_date: Optional[str] = None
+    vote_average: Optional[str] = None
+
+class TMDBMovieDetails(BaseModel):
+    tmdb_id: int
+    title: str
+    overview: Optional[str] = None
+    release_date: Optional[str] = None
+    poster_url: Optional[str] = None
+    backdrop_url: Optional[str] = None
+    genres: List[Dict] = []
+
+class TFIDFRecTiem(BaseModel):
+    title: str
+    similarity: float
+    tmdb: Optional[TMDBMovieCard] = None
+
+class SearchBundleResponse(BaseModel):
+    query: str
+    movie_details: TMDBMovieDetails
+    tfidf_recommendations: List[TFIDFRecTiem]
+    genre_recommendations: List[TMDBMovieCard]
+
+def _norm_title(t -> str) -> str:
+    return str(t).strip().lower()
+
+def make_image_url(path: Optional[str] -> Optional[str]):
+    if not path:
+        return None
+    else:
+        return f"{TMDB_IMG_500}{path}"
+    
