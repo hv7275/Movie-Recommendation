@@ -85,3 +85,70 @@ def make_image_url(path: Optional[str]) -> Optional[str]:
     else:
         return f"{TMDB_IMG_500}{path}"
     
+async def tmdb_get(path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+
+    safe TMDB Get
+    -- Network Error -> 502
+    -- TMDB API Error -> 502 With detail
+
+    """
+    q = dict(params)
+    q['api_key'] = TMDB_API_KEY
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.get(f"{TMDB_BASE}{path}", params=q)
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"TMDB request error: {type(e).__name__} | {repr(e)}",
+        )
+    
+    if r.status_code != 200:
+        raise HTTPException(
+            status_code=502,
+            detail=f"TMDB Error {r.status_code}: {r.text}"
+        )
+    
+    return r.json()
+
+
+async def tmdb_card_fromm_results(result: List[dict], limit: int = 20) -> List[TMDBMovieCard]:
+    out: List[TMDBMovieCard] = []
+    for m in (result or [])[:limit]:
+        out.append(
+            TMDBMovieCard(
+                tmdb_id=int(m['id']),
+                title=m.get('title') or m.get('name') or "",
+                poster_url=make_image_url(m.get('poster_path')),
+                release_date=m.get('release_date'),
+                vote_average=m.get('vote_average'),
+            )
+        )
+    return out
+
+async def tmdb_search_movies(query: str, page: int=1) -> Dict[str, Any]:
+    """
+    Docstring for tmdb_search_movies
+    
+    :param querry: Description
+    :type querry: str
+    :param page: Description
+    :type page: int
+    :return: Description
+    :rtype: Dict[str, Any]
+
+    Raw TMDB response for keyword search (MULTIPLE results).
+    Streamlit will use this for suggestions and grid.
+    """
+
+    return await tmdb_get(
+        "/search/movie",
+        {
+            'query':query,
+            'include_adult':False,
+            'language':'en-US',
+            'page':page
+        }
+    )
