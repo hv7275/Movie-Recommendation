@@ -288,4 +288,103 @@ async def attach_tmdb_card_by_title(title: str) -> Optional[TMDBMovieCard]:
     
     except Exception:
         return None
+
+
+# STARTUP: LOAD PICKLES
+@app.on_event('startup')
+def load_pickle():
+    global df, indices_obj, tfidf_marix, tfidf_obj, TITLE_TO_IDX
+
+    # Load df
+    with open(DF_PATH, 'rb') as f:
+        df = pickle.load(f)
     
+    # Load Indices
+
+    with open(INDICES_PATH, 'rb') as f:
+        indices_obj = pickle.load(f)
+
+    # Load TF-IDF Matrix (Usually  scipy sparse)
+    with open(TFIDF_MATRIX_PATH, 'rb') as f:
+        tfidf_marix = pickle.load(f)
+
+    # Load TF-IDF  vectorizer (optional, not used directly here)
+    with open(TFIDF_PATH, 'rb') as f:
+        tfidf_obj = pickle.load(f)
+
+    TITLE_TO_IDX = build_title_to_idx_map(indices_obj)
+
+    # sansity
+    if df is None or 'title' not in df.columns:
+        raise RecursionError(
+            "df.pkl must contain a DataFrame with a 'title' column"
+        )
+
+
+# HEALTH ROUTES
+@app.get("/health")
+def health():
+    return {
+        "status":"ok"
+    }
+
+# HOME ROUTES
+@app.get('/home', response_model=List[TMDBMovieCard])
+async def home(category: str = Query('popular'), limit: int = Query(24, ge=1, le=50)):
+    """
+    Docstring for home
+    
+    :param category: Description
+    :type category: str
+    :param limit: Description
+    :type limit: int
+
+    Home feed for Streamlit (posters).
+    category:
+        -- Tranding (trending/movie/day)
+        -- Popular, top_rated, upcomming, now_playing (movie/{category})
+    """
+
+    try:
+        if category == 'trending':
+            data = await tmdb_get('/trending/movie/day', {'language':'en-US'})
+            return await tmdb_card_from_results(data.get('results', []), limit=limit)
+        
+        if category not in {'popular', 'top_rated', 'upcoming', 'now_playing'}:
+            raise HTTPException(
+                status_code=400,
+                detail='Invailid Category'
+            )
+        
+        data = await tmdb_get(f'/movie/{category}', {'language':'en-US', 'page':1})
+        return await tmdb_card_from_results(data.get('results', []), limit=limit)
+    
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Home route failed: {e}")
+
+
+# SEARCH MULTIPLE VIA KEYWORDS
+@app.get('/tmdb/search')
+async def tmdb_search(
+    qurry: str = Query(..., min_length=1),
+    page: int = Query(1, ge=1, le=10)
+):
+    """
+    Docstring for tmdb_search
+    
+    :param qurry: Description
+    :type qurry: str
+    :param page: Description
+    :type page: int
+
+    RETURN RAW TMDB shape with 'results' List.
+    Streamlit will use it for:
+        -- dropdown suggestions
+        -- grid result
+    """
+
+    return await tmdb_search_movies(query=qurry, page=page)
+
