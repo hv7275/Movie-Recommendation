@@ -46,7 +46,7 @@ indices_obj: Any = None
 tfidf_marix: Any = None
 tfidf_obj: Any = None
 
-TITLE_TO_IDX = Optional[Dict[str, int]] = None
+TITLE_TO_IDX: Optional[Dict[str, int]] = None
 
 # Models 
 class TMDBMovieCard(BaseModel):
@@ -129,6 +129,18 @@ async def tmdb_card_from_results(result: List[dict], limit: int = 20) -> List[TM
         )
     return out
 
+
+async def tmdb_movie_details(movie_id: int) -> TMDBMovieDetails:
+    data = await tmdb_get(f"/movie/{movie_id}", {"language": "en-US"})
+    return TMDBMovieDetails(
+        tmdb_id=int(data["id"]),
+        title=data.get("title") or "",
+        overview=data.get("overview"),
+        release_date=data.get("release_date"),
+        poster_url=make_image_url(data.get("poster_path")),
+        backdrop_url=make_image_url(data.get("backdrop_path")),
+        genres=data.get("genres", []) or [],
+    )
 async def tmdb_search_movies(query: str, page: int=1) -> Dict[str, Any]:
     """
     Docstring for tmdb_search_movies
@@ -387,4 +399,153 @@ async def tmdb_search(
     """
 
     return await tmdb_search_movies(query=qurry, page=page)
+
+# MOVIE DETAIL
+@app.get('/movie/id/{tmdb_id}', response_model=TMDBMovieDetails)
+async def movie_details_routes(tmdb_id: int):
+    return await TMDBMovieDetails(tmdb_id)
+
+# GENRE RECOMMENDATION ROUTE
+@app.get("/recommand/genre", response_model=list[TMDBMovieCard])
+async def recommand_genre(
+    tmdb_id: int = Query(...),
+    limit: int = Query(18, ge=1, le=50)
+):
+    """
+    Docstring for recommand_genre
+    
+    :param tmdb_id: Description
+    :type tmdb_id: int
+    :param limit: Description
+    :type limit: int
+
+    Given a TMDB movie ID:
+        -- Fatch Details
+        -- Pick First Genre
+        -- Discover Movie In That Genre (popular)
+    """
+
+    
+    details = await tmdb_movie_details(tmdb_id)
+
+    if not details.genres:
+        return []
+    
+    genre_id = details.genres[0]['id']
+    discover = await tmdb_get(
+        "/discover/movie",
+        {
+            "with_genres": genre_id,
+            "language": 'en-US',
+            'sort_by':'popularity.desc',
+            'page':1
+        }
+    )
+
+    cards = await tmdb_card_from_results(discover.get('results', []), limit=limit)
+    return [c for c in cards if c.tmdb_id != tmdb_id]
+
+
+# TF-IDF ONLY
+@app.get("/recommand/tfidf")
+async def recommand_tfidf(
+    title: str = Query(..., min_length=1),
+    top_n: int = Query(10, ge=1, le=50)
+):
+    '''
+    Docstring for recommand_tfidf
+    
+    :param title: Description
+    :type title: str
+    :param top_n: Description
+    :type top_n: int
+    '''
+
+    resc = tfidf_recommend_title(title, top_n=top_n)
+    return [
+        {"title":t,"score":s} for t, s in resc
+    ]
+
+
+# BUNDLE: DETAILS + TFIDF recs + GENRE recs
+@app.get("/movie/search", response_model=SearchBundleResponse)
+async def search_bundle(
+    query: str = Query(..., min_length=1),
+    tfidf_top_n: int = Query(12, ge=1, le=30),
+    genres_limit: int = Query(12, ge=1, le=30)
+):
+    """
+    Docstring for search_bundle
+    
+    :param query: Description
+    :type query: str
+    :param tfidf_top_n: Description
+    :type tfidf_top_n: int
+    :param genres_limit: Description
+    :type genres_limit: int
+
+    This Endpoint is for when you have a selected movie and want:
+        -- Movie Details
+        -- TF-IDF Recommandations (local) + poster
+        -- Genre Recommandations (TMDB) + poster
+
+    NOTE:
+    -- It select the BEST match from TMDB for Given Query
+    -- If You want MULTIPLE matches, use, /tmdb/search
+
+    """
+    best = await tmdb_search_first(query=)
+
+    if not best:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No TMDB movie found for query: {query}"
+        )
+    
+    tmdb_id = int(best['id'])
+    details = await tmdb_movie_details(tmdb_id)
+
+    # 1) TF-IDF recommandations (never crash endpoint)
+    tfidf_items: List[TFIDFRecTiem] = []
+
+    recs: List[Tuple[str, float]] = []
+
+    try:
+        # Try local Dataset by TMDB title
+        recs = tfidf_recommend_title(details.title, top_n=tfidf_top_n)
+    except  Exception:
+        # Fallback to user query
+        try:
+            recs = tfidf_recommend_title(query, top_n=tfidf_top_n)
+        except Exception:
+            recs = []
+    
+    for title, score in recs:
+        card = await attach_tmdb_card_by_title(title=title)
+        tfidf_items.append(TFIDFRecTiem(title=title, score=score, tmdb=card))
+    
+    # 2) Genre recommandations (TMDB discover by first genre)
+    genre_resc: List[TMDBMovieCard] = []
+
+    if details.genres:
+        genre_id = details.genres[0]['id']
+        discover = await tmdb_get(
+            {
+                "with_genres": genre_id,
+                "language": "en-US",
+                "sort_by": "popularity.desc",
+                "page": 1,
+            },
+        )
+
+        card = await tmdb_card_from_results(
+            discover.get('results', []), limit=genres_limit
+        )
+
+        return SearchBundleResponse(
+        query=query,
+        movie_details=details,
+        tfidf_recommendations=tfidf_items,
+        genre_recommendations=genre_resc,
+        )
 
