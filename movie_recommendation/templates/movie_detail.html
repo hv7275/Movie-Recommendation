@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+  {% if error_message %}
+    <div class="alert alert-error">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      {{ error_message }}
+    </div>
+  {% endif %}
+
+  {% if details %}
+
+    <!-- Movie Detail Hero -->
+    <section class="movie-detail">
+      <div class="detail-poster">
+        {% if details.poster_url %}
+          <img src="{{ details.poster_url }}" alt="{{ details.title }} poster" />
+          <div class="poster-glow"></div>
+        {% else %}
+          <div class="poster-placeholder large">
+            <i class="fa-solid fa-camera-movie"></i>
+            <span>No Poster</span>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="detail-info">
+        {% if details.genres %}
+          <div class="genre-list top-genres">
+            {% for genre in details.genres %}
+              <span class="genre-badge">{{ genre.name }}</span>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <h1 class="detail-title">{{ details.title }}</h1>
+
+        <div class="detail-meta">
+          {% if details.release_date %}
+            <span class="meta-item">
+              <i class="fa-regular fa-calendar"></i>
+              {{ details.release_date }}
+            </span>
+          {% endif %}
+          {% if details.vote_average %}
+            <span class="meta-item rating-badge">
+              <i class="fa-solid fa-star"></i>
+              {{ details.vote_average }}
+            </span>
+          {% endif %}
+          {% if details.runtime %}
+            <span class="meta-item">
+              <i class="fa-regular fa-clock"></i>
+              {{ details.runtime }} min
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="overview-block">
+          <h4 class="overview-label">Overview</h4>
+          <p class="overview">{{ details.overview or 'No overview available.' }}</p>
+        </div>
+
+        {% if details.tagline %}
+          <blockquote class="tagline">"{{ details.tagline }}"</blockquote>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="review-section">
+      <div class="section-heading">
+        <h2><i class="fa-regular fa-comments"></i> User Reviews</h2>
+      </div>
+
+      {% if current_user %}
+        <form class="review-form" action="{{ url_for('frontend.add_review', tmdb_id=details.tmdb_id) }}" method="post">
+          <label>
+            Rating
+            <select name="rating" required>
+              {% for score in range(10, 0, -1) %}
+                <option value="{{ score }}">{{ score }} / 10</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>
+            Your review
+            <textarea name="review_text" rows="4" placeholder="Share your thoughts about this movie..." required></textarea>
+          </label>
+          <button type="submit">Post Review</button>
+        </form>
+      {% else %}
+        <div class="review-login-prompt">
+          <a href="{{ url_for('frontend.login', next=request.path) }}">Login</a>
+          or
+          <a href="{{ url_for('frontend.register') }}">register</a>
+          to leave a review.
+        </div>
+      {% endif %}
+
+      {% if reviews %}
+        <div class="review-list">
+          {% for review in reviews %}
+            <article class="review-card">
+              <div class="review-meta">
+                <strong>{{ review.username }}</strong>
+                <span>{{ review.rating }} / 10</span>
+              </div>
+              <p>{{ review.review_text }}</p>
+              <time>{{ review.created_at }}</time>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state soft">
+          <p>No reviews yet. Be the first to review this movie.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <!-- TF-IDF Recommendations -->
+    {% if tfidf_cards %}
+      <section class="rec-section">
+        <div class="section-heading">
+          <h2>
+            <span class="section-icon tfidf-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+            TF-IDF Recommendations
+          </h2>
+          <p class="section-sub">Based on content similarity</p>
+        </div>
+        <div class="grid">
+          {% for card in tfidf_cards %}
+            <article class="movie-card">
+              <a href="{{ url_for('frontend.movie_detail', tmdb_id=card.tmdb_id) }}" class="card-link">
+                <div class="card-poster">
+                  {% if card.poster_url %}
+                    <img src="{{ card.poster_url }}" alt="{{ card.title }} poster" loading="lazy" />
+                  {% else %}
+                    <div class="poster-placeholder">
+                      <i class="fa-solid fa-camera-movie"></i>
+                      <span>No Image</span>
+                    </div>
+                  {% endif %}
+                  <div class="card-overlay">
+                    <span class="card-cta">View Details <i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+                  </div>
+                </div>
+                <div class="movie-card-body">
+                  <h3 class="card-title">{{ card.title }}</h3>
+                  <div class="card-meta">
+                    {% if card.release_date %}
+                      <span class="card-year"><i class="fa-regular fa-calendar"></i> {{ card.release_date[:4] }}</span>
+                    {% endif %}
+                    {% if card.vote_average %}
+                      <span class="card-rating"><i class="fa-solid fa-star"></i> {{ card.vote_average }}</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </a>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+    <!-- Genre Recommendations -->
+    {% if genre_cards %}
+      <section class="rec-section">
+        <div class="section-heading">
+          <h2>
+            <span class="section-icon genre-icon"><i class="fa-solid fa-tags"></i></span>
+            Genre Recommendations
+          </h2>
+          <p class="section-sub">More films in the same genre</p>
+        </div>
+        <div class="grid">
+          {% for card in genre_cards %}
+            <article class="movie-card">
+              <a href="{{ url_for('frontend.movie_detail', tmdb_id=card.tmdb_id) }}" class="card-link">
+                <div class="card-poster">
+                  {% if card.poster_url %}
+                    <img src="{{ card.poster_url }}" alt="{{ card.title }} poster" loading="lazy" />
+                  {% else %}
+                    <div class="poster-placeholder">
+                      <i class="fa-solid fa-camera-movie"></i>
+                      <span>No Image</span>
+                    </div>
+                  {% endif %}
+                  <div class="card-overlay">
+                    <span class="card-cta">View Details <i class="fa-solid fa-arrow-up-right-from-square"></i></span>
+                  </div>
+                </div>
+                <div class="movie-card-body">
+                  <h3 class="card-title">{{ card.title }}</h3>
+                  <div class="card-meta">
+                    {% if card.release_date %}
+                      <span class="card-year"><i class="fa-regular fa-calendar"></i> {{ card.release_date[:4] }}</span>
+                    {% endif %}
+                    {% if card.vote_average %}
+                      <span class="card-rating"><i class="fa-solid fa-star"></i> {{ card.vote_average }}</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </a>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+
+  {% else %}
+    <div class="empty-state">
+      <i class="fa-solid fa-film-slash"></i>
+      <p>Movie not found. It may have been removed or the ID is invalid.</p>
+      <a href="{{ url_for('frontend.home') }}" class="btn-back">
+        <i class="fa-solid fa-arrow-left"></i> Back to Home
+      </a>
+    </div>
+  {% endif %}
+
+{% endblock %}

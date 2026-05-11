@@ -1,11 +1,11 @@
 # Movie Recommender
 
->A simple movie recommendation app composed of a Streamlit frontend and a FastAPI backend. Uses TMDB for movie metadata and a TF-IDF based recommender built from the included dataset.
+>A simple movie recommendation app composed of a Flask frontend and a Flask backend. Uses TMDB for movie metadata and a TF-IDF based recommender built from the included dataset.
 
 ## Project structure
 
-- `app.py` — Streamlit frontend UI
-- `main.py` — FastAPI backend serving recommendations
+- `movie_recommendation/` — Flask application package with frontend templates and API routes
+- `main.py` — Flask entrypoint serving the UI and API
 - `movies.ipynb` — Notebook used to prepare datasets and TF-IDF artifacts
 - `movies_metadata.csv` — Original metadata CSV used to build models
 - `requirements.txt` — Python dependencies
@@ -49,31 +49,30 @@ TMDB_API_KEY=your_tmdb_api_key_here
 
 ## Running the app
 
-1. Start the backend API (from the project root):
+1. Start the Flask application from the project root:
 
 ```powershell
-uvicorn main:app --reload --port 8000
+python main.py
 ```
 
-The backend depends on the pickled artifacts described above and the `TMDB_API_KEY` in `.env`.
+2. Open your browser at:
 
-2. Start the Streamlit frontend:
-
-```powershell
-streamlit run app.py
+```text
+http://127.0.0.1:8000/
 ```
 
-Note: `app.py` defaults to an external `API_BASE` hosted URL. To point the frontend to your local backend, open `app.py` and set `API_BASE = "http://127.0.0.1:8000"`.
+The app depends on the pickled artifacts described above and the `TMDB_API_KEY` in `.env`.
 
 ## Troubleshooting
 
 - If you see errors about missing `.pkl` files, generate them via `movies.ipynb`.
 - If TMDB requests fail, ensure `TMDB_API_KEY` is present and valid in `.env`.
-- If Streamlit shows stale state, try restarting the app or clearing the browser cache.
+- If the web UI does not load, verify that `python main.py` is running and that port `8000` is available.
 
 ## Development notes
 
-- The backend is implemented with FastAPI in `main.py` and exposes endpoints consumed by the Streamlit UI in `app.py`.
+- The full app is now a Flask application served from `main.py`.
+- The frontend uses Jinja templates in `movie_recommendation/templates/`.
 - Use the notebook to experiment with TF-IDF parameters and regenerate artifacts.
 
 ---

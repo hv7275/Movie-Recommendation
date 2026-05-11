@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="auth-panel">
+    <h1>Login</h1>
+    <form class="auth-form" method="post">
+      <label>
+        Username
+        <input type="text" name="username" autocomplete="username" required />
+      </label>
+      <label>
+        Password
+        <input type="password" name="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit">Login</button>
+    </form>
+    <p class="auth-switch">
+      New here? <a href="{{ url_for('frontend.register') }}">Create an account</a>.
+    </p>
+  </section>
+{% endblock %}

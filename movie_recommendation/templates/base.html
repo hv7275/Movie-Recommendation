@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>Movie Recommender</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.4/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="{{ url_for('frontend.static', filename='css/styles.css') }}" />
+  </head>
+  <body>
+
+    <!-- Ambient background orbs -->
+    <div class="bg-orb bg-orb-1"></div>
+    <div class="bg-orb bg-orb-2"></div>
+    <div class="bg-orb bg-orb-3"></div>
+
+    <header class="page-header">
+      <div class="container header-inner">
+        <a class="brand" href="{{ url_for('frontend.home') }}">
+          <span class="brand-icon"><i class="fa-solid fa-film"></i></span>
+          <span class="brand-text">cine<span>match</span></span>
+        </a>
+        <nav class="header-nav">
+          <a href="{{ url_for('frontend.home') }}" class="nav-link"><i class="fa-solid fa-house"></i> home</a>
+          {% if current_user %}
+            <span class="nav-user"><i class="fa-regular fa-user"></i> {{ current_user.username }}</span>
+            <a href="{{ url_for('frontend.logout') }}" class="nav-link"><i class="fa-solid fa-right-from-bracket"></i> logout</a>
+          {% else %}
+            <a href="{{ url_for('frontend.login') }}" class="nav-link"><i class="fa-solid fa-right-to-bracket"></i> login</a>
+            <a href="{{ url_for('frontend.register') }}" class="nav-link"><i class="fa-solid fa-user-plus"></i> register</a>
+          {% endif %}
+        </nav>
+      </div>
+    </header>
+
+    <main class="container main-content">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">
+                {{ message }}
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-inner">
+        <div class="footer-main">
+          <div>
+            <div class="footer-brand">
+              <i class="fa-solid fa-film"></i> cine<span>match</span>
+            </div>
+            <p class="footer-note">premium movie discovery powered by tmdb and tf-idf recommendations.</p>
+          </div>
+          <nav class="footer-links" aria-label="Footer links">
+            <a href="{{ url_for('frontend.home') }}">home</a>
+            <a href="{{ url_for('frontend.home', category='popular') }}">popular</a>
+            <a href="{{ url_for('frontend.home', category='top_rated') }}">top rated</a>
+            {% if current_user %}
+              <a href="{{ url_for('frontend.logout') }}">logout</a>
+            {% else %}
+              <a href="{{ url_for('frontend.login') }}">login</a>
+            {% endif %}
+          </nav>
+        </div>
+        <div class="footer-bottom">
+          <span>2026 cinematch</span>
+          <span>built with flask</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

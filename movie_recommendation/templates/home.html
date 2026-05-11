@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="hero">
+    <p class="hero-kicker">premium movie discovery</p>
+    <h1>find your next favorite film</h1>
+    <p class="subtitle">search millions of titles or browse what is popular right now.</p>
+    <form class="search-form" action="{{ url_for('frontend.home') }}" method="get">
+      <input
+        type="search"
+        name="query"
+        placeholder="search a movie title..."
+        value="{{ query or '' }}"
+        autocomplete="off"
+      />
+      <button type="submit">search</button>
+    </form>
+  </section>
+
+  <nav class="category-nav" aria-label="Movie categories">
+    {% for category_id, category_label in categories %}
+      <a
+        class="category-link{% if category == category_id and not query %} active{% endif %}"
+        href="{{ url_for('frontend.home', category=category_id) }}"
+      >
+        {{ category_label|lower }}
+      </a>
+    {% endfor %}
+  </nav>
+
+  {% if error_message %}
+    <div class="alert alert-error">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      {{ error_message }}
+    </div>
+  {% endif %}
+
+  <section class="results-section">
+    <div class="section-heading">
+      <h2>{{ heading }}</h2>
+      {% if cards %}
+        <span class="result-count">{{ cards|length }} found</span>
+      {% endif %}
+    </div>
+
+    {% if cards %}
+      <div class="grid">
+        {% for card in cards %}
+          <article class="movie-card">
+            <a href="{{ url_for('frontend.movie_detail', tmdb_id=card.tmdb_id) }}" class="card-link">
+              {% if card.poster_url %}
+                <img src="{{ card.poster_url }}" alt="{{ card.title }} poster" loading="lazy" />
+              {% else %}
+                <div class="poster-placeholder">
+                  <i class="fa-solid fa-film"></i>
+                  <span>no image</span>
+                </div>
+              {% endif %}
+              <div class="movie-card-body">
+                <h3>{{ card.title }}</h3>
+                <p class="meta">
+                  {% if card.release_date %}
+                    {{ card.release_date[:4] }}
+                  {% endif %}
+                  {% if card.vote_average %}
+                    {% if card.release_date %} &middot; {% endif %}
+                    {{ card.vote_average }} / 10
+                  {% endif %}
+                </p>
+              </div>
+            </a>
+          </article>
+        {% endfor %}
+      </div>
+    {% elif query and not error_message %}
+      <div class="empty-state">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <p>no results found for <strong>"{{ query }}"</strong>. try a different title.</p>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}
